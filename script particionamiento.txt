@@ -1,0 +1,49 @@
+//Iniciar el servidor MongoDB con soporte para sharding: Configurar varios servidores como shards.
+
+mongod --shardsvr --dbpath /data/shard1 --port 27022 --replSet rs1 --bind_ip localhost
+mongod --shardsvr --dbpath /data/shard2 --port 27023 --replSet rs2 --bind_ip localhost
+
+//Configurar el servidor de configuración
+mongod --configsvr --dbpath /data/config --port 27017 --replSet configReplSet --bind_ip localhost
+
+//Inicializar el router Mongosh
+
+mongosh --configdb configReplSet/localhost:27017 --bind_ip localhost --port 27020
+
+// Conectar al router y agregar shards: Usando la consola mongo conectada al puerto del router
+
+sh.addShard("rs1/localhost:27022")
+sh.addShard("rs2/localhost:27023")
+
+// Habilitar el particionamiento en la base de datos
+use Torneo
+sh.enableSharding("Torneo")
+
+//Definir las shard keys para particionar colecciones
+sh.shardCollection("Torneo.jugador", { region: "hashed" })
+sh.shardCollection("Torneo.resultado", { evento_id: 1 })
+
+//Insertar datos de prueba
+db.jugador.insertMany([
+    { nombre: "Ramon Cendoya", region: "Europa", deporte: "Futbol" },
+    { nombre: "Frank Martínez", region: "América", deporte: "Futbol" }
+])
+db.resultado.insertMany([
+    { goles_id: 101, resultado: "2", jugador: "Ramon Cendoya" },
+    { goles_id: 102, resultado: "1", jugador: "Frank Martínez" }
+])
+
+//comprobar el estado del clúster
+
+
+sh.status()
+
+
+//Ejecutar consultas distribuidas para validar
+db.jugador.find({ region: "Europa" })
+db.resultados.find({ goles_id: 101 })
+
+//Comprobar métricas de distribución de datos
+
+db.jugador.getShardDistribution()
+
